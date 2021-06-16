@@ -137,10 +137,71 @@ func dptc(c data.Config) error {
 	if err != nil {
 		return err
 	}
+	var benchs1 = benchs
+	benchs = data.PackageMap{}
+
+	var benchs2 data.PackageMap
+	if benchRegex := c.DynamicConfig.BenchmarkRegex; benchRegex != "" {
+		benchs2, err = bench.MatchingFunctions(c.Project2, benchRegex)
+	} else {
+		benchs2, err = bench.Functions(c.Project2)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if benchs2 != nil {
+		var countbench1 = 0
+		var countbenchAll = 0
+
+		//Merge bench2 and bench (using only intersection) and log difference
+		for module, test := range benchs1 {
+			//fmt.Println("Module:", module)
+
+			for test, bench := range test {
+				//fmt.Println("  Test:", test)
+
+				for _, b := range bench {
+					//fmt.Println("    Bench:", b)
+					countbench1++
+
+					//Search same benchmark in benchs2
+					for module2, test2 := range benchs2 {
+						for test2, bench2 := range test2 {
+							for _, b2 := range bench2 {
+								if module == module2 && test == test2 && b == b2 {
+									//Found, add to common set
+									if (benchs[module] == nil) {
+										benchs[module] = data.FileMap{}
+									}
+									if (benchs[module][test] == nil) {
+										benchs[module][test] = data.File{}
+									}
+									benchs[module][test] = append(benchs[module][test], b)
+									countbenchAll++
+
+									//Remove found common benchmark from both other sets
+									//???
+
+								}
+							}
+						}
+					}
+
+				}
+			}
+		}
+
+		fmt.Println("Bench1: ", countbench1, "All: ", countbenchAll)
+	}
+
+
 
 	runner, err := bench.NewRunner(
 		c.GoRoot,
 		c.Project,
+		c.Project2,
 		benchs,
 		c.DynamicConfig.WarmupIterations,
 		c.DynamicConfig.MeasurementIterations,
@@ -231,6 +292,7 @@ func dptc(c data.Config) error {
 	}
 	took := time.Since(start)
 	fmt.Printf("\n%d Benchmarks executed in %d runs which took %dns\n", benchCounter, c.DynamicConfig.Runs, took.Nanoseconds())
+	fmt.Printf("(%f minutes) \n", took.Minutes())
 	return nil
 }
 

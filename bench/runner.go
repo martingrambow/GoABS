@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,7 +38,7 @@ type Runner interface {
 
 // NewRunner creates a new benchmark runner.
 // By default it returns a penalised runner that in consecutive runs only executes successful benchmark executions.
-func NewRunner(goRoot, projectRoot string, benchs data.PackageMap, wi int, mi int, timeout, benchTime, benchDuration, runDuration time.Duration, benchMem bool, profile data.Profile, profileDir string, out csv.Writer) (Runner, error) {
+func NewRunner(goRoot, projectRoot string, project2Root string, benchs data.PackageMap, wi int, mi int, timeout, benchTime, benchDuration, runDuration time.Duration, benchMem bool, profile data.Profile, profileDir string, out csv.Writer) (Runner, error) {
 	// if benchmark gets executed over time period, do not do warm-up iterations
 	if benchDuration > 0 {
 		wi = 0
@@ -59,20 +60,22 @@ func NewRunner(goRoot, projectRoot string, benchs data.PackageMap, wi int, mi in
 
 	return &runnerWithPenalty{
 		defaultRunner: defaultRunner{
-			projectRoot:   projectRoot,
-			wi:            wi,
-			mi:            mi,
-			benchDuration: benchDuration,
-			runDuration:   runDuration,
-			benchMem:      benchMem,
-			resultParser:  rp,
-			out:           out,
-			benchs:        benchs,
-			profile:       profile,
-			profileDir:    profileDir,
-			env:           executil.Env(goRoot, executil.GoPath(projectRoot)),
-			cmdCount:      cmdCount,
-			cmdArgs:       cmdArgs,
+			projectRoot:    projectRoot,
+			project2Root:   project2Root,
+			wi:             wi,
+			mi:             mi,
+			benchDuration:  benchDuration,
+			runDuration:    runDuration,
+			benchMem:       benchMem,
+			resultParser:   rp,
+			out:            out,
+			benchs:         benchs,
+			profile:        profile,
+			profileDir:     profileDir,
+			env:            executil.Env(goRoot, executil.GoPath(projectRoot)),
+			env2:           executil.Env(goRoot, executil.GoPath(project2Root)),
+			cmdCount:       cmdCount,
+			cmdArgs:        cmdArgs,
 		},
 		penalisedBenchs: make(map[string]struct{}),
 		timeout:         timeout,
@@ -80,20 +83,22 @@ func NewRunner(goRoot, projectRoot string, benchs data.PackageMap, wi int, mi in
 }
 
 type defaultRunner struct {
-	projectRoot   string
-	wi            int
-	mi            int
-	benchDuration time.Duration
-	benchMem      bool
-	runDuration   time.Duration
-	resultParser  resultParser
-	out           csv.Writer
-	benchs        data.PackageMap
-	profile       data.Profile
-	profileDir    string
-	env           []string
-	cmdCount      string
-	cmdArgs       []string
+	projectRoot    string
+	project2Root   string
+	wi             int
+	mi             int
+	benchDuration  time.Duration
+	benchMem       bool
+	runDuration    time.Duration
+	resultParser   resultParser
+	out            csv.Writer
+	benchs         data.PackageMap
+	profile        data.Profile
+	profileDir     string
+	env            []string
+	env2           []string
+	cmdCount       string
+	cmdArgs        []string
 }
 
 type runnerWithPenalty struct {
@@ -102,7 +107,13 @@ type runnerWithPenalty struct {
 	penalisedBenchs map[string]struct{}
 }
 
-func (r *runnerWithPenalty) RunBenchmark(ctx context.Context, bench data.Function, run int, suiteExec int, test string) (int, error) {
+type rmitBenchmark struct {
+	dir1   string
+	dir2   string
+	bench  data.Function
+}
+
+func (r *runnerWithPenalty) RunBenchmark(ctx context.Context, bench rmitBenchmark, run int, suiteExec int, test string) (int, error) {
 	if r.benchDuration != 0 {
 		startBench := time.Now()
 		benchCount := 0
@@ -125,31 +136,60 @@ func (r *runnerWithPenalty) RunBenchmark(ctx context.Context, bench data.Functio
 	// no benchmark duration supplied -> only one benchmark execution
 	exec, err := r.RunBenchmarkOnce(ctx, bench, run, suiteExec, 0, test)
 	if exec {
+		fmt.Printf("Benchmark run succesful\n")
 		return 1, err
 	}
+	fmt.Printf("Benchmark run failed\n")
 	return 0, err
 
 }
 
-func (r *runnerWithPenalty) RunBenchmarkOnce(ctx context.Context, bench data.Function, run int, suiteExec int, benchExec int, test string) (bool, error) {
-	relBenchName := fmt.Sprintf("%s/%s::%s", bench.Pkg, bench.File, bench.Name)
-	// check if benchmark is penaltised
-	_, penaltised := r.penalisedBenchs[relBenchName]
-	if penaltised {
-		fmt.Printf("### Do not execute Benchmark due to penalty: %s\n", relBenchName)
-		return false, nil
-	}
-
-	fmt.Printf("### Execute Benchmark: %s\n", bench.Name)
-	args := append(r.cmdArgs, fmt.Sprintf(cmdArgsBench, bench.Name))
+func (r *runnerWithPenalty) RunBenchmarkOnce(ctx context.Context, bench rmitBenchmark, run int, suiteExec int, benchExec int, test string) (bool, error) {
+	fmt.Printf("### Execute Benchmark: %s/%s::%s\n", bench.bench.Pkg, bench.bench.File, bench.bench.Name)
+	args := append(r.cmdArgs, fmt.Sprintf(cmdArgsBench, bench.bench.Name))
 	// add profile if necessary
 	if r.profile != data.NoProfile {
-		args = r.profileCmdArgs(args, bench, run, suiteExec, benchExec, test)
+		args = r.profileCmdArgs(args, bench.bench, run, suiteExec, benchExec, test)
 	}
 
-	// intentionally not using exec.CommandContex -> let's the benchmark finish first
-	c := exec.Command(executil.GoCommand(r.env), args...)
-	c.Env = r.env
+	x := rand.Intn(2) //x is 0 or 1
+	fmt.Printf("x is %d\n", x)
+
+	if x == 0 {
+		fmt.Printf("Changing directory to dir1: %s\n", bench.dir1)
+		err := os.Chdir(bench.dir1)
+		if err != nil {
+			fmt.Printf("Error while changing directory to dir1: %s\n %s\n", bench.dir1, err)
+		}
+		r.RunOneVersion(ctx, bench.bench, run, suiteExec, benchExec, test, 1, r.env)
+	}
+
+	fmt.Printf("Changing directory to dir2: %s\n", bench.dir2)
+	err := os.Chdir(bench.dir2)
+	if err != nil {
+		fmt.Printf("Error while changing directory to dir2: %s\n %s\n", bench.dir2, err)
+	}
+	r.RunOneVersion(ctx, bench.bench, run, suiteExec, benchExec, test, 2, r.env2)
+
+
+	if x > 0 {
+		fmt.Printf("Changing directory to dir1: %s\n", bench.dir1)
+		err := os.Chdir(bench.dir1)
+		if err != nil {
+			fmt.Printf("Error while changing directory to dir1: %s\n %s\n", bench.dir1, err)
+		}
+		r.RunOneVersion(ctx, bench.bench, run, suiteExec, benchExec, test, 1, r.env)
+	}
+
+	return true, nil
+}
+
+func (r *runnerWithPenalty) RunOneVersion(ctx context.Context, bench data.Function, run int, suiteExec int, benchExec int, test string, version int, env []string) (bool, error) {
+	relBenchName := fmt.Sprintf("%s/%s::%s", bench.Pkg, bench.File, bench.Name)
+	args := append(r.cmdArgs, fmt.Sprintf(cmdArgsBench, bench.Name))
+
+	c := exec.Command(executil.GoCommand(env), args...)
+	c.Env = env
 
 	res, err := c.CombinedOutput()
 	resStr := string(res)
@@ -161,8 +201,11 @@ func (r *runnerWithPenalty) RunBenchmarkOnce(ctx context.Context, bench data.Fun
 			err = nil
 			return false, nil
 		}
-		fmt.Printf("%s\n", resStr)
+		fmt.Printf("Cmd Error:\n%s\n", resStr)
+		return false, err
 	}
+
+	fmt.Printf("Benchmark %d done: %s\n", version, resStr)
 
 	result, err := r.resultParser.parse(resStr)
 	if err != nil {
@@ -171,102 +214,64 @@ func (r *runnerWithPenalty) RunBenchmarkOnce(ctx context.Context, bench data.Fun
 			r.penalisedBenchs[relBenchName] = struct{}{}
 			return false, nil
 		}
+		fmt.Printf("Parse Error:\n%s\n", resStr)
 		return false, err
 	}
+	fmt.Printf("Result %d parsed\n", version)
 
-	saveBenchOut(test, run, suiteExec, benchExec, bench, result, r.out, r.benchMem)
-
+	saveBenchOut(test, run, suiteExec, benchExec, bench, result, r.out, r.benchMem, version)
 	return true, nil
-}
-
-func (r *runnerWithPenalty) RunUntil(ctx context.Context, run int, test string, done <-chan struct{}) (int, error) {
-	benchCount := 0
-Forever:
-	for suiteExec := 0; true; suiteExec++ {
-		for pkgName, pkg := range r.benchs {
-			fmt.Printf("# Execute Benchmarks in Dir: %s\n", pkgName)
-
-			dir := filepath.Join(r.projectRoot, pkgName)
-
-			err := os.Chdir(dir)
-			if err != nil {
-				return benchCount, err
-			}
-
-			for fileName, file := range pkg {
-				fmt.Printf("## Execute Benchmarks of File: %s\n", fileName)
-				for _, bench := range file {
-					executed, err := r.RunBenchmark(ctx, bench, run, suiteExec, test)
-
-					if err != nil {
-						return benchCount, err
-					}
-					benchCount += executed
-
-					select {
-					case <-ctx.Done():
-						return benchCount, ctx.Err()
-					case <-done:
-						break Forever
-					default:
-					}
-				}
-			}
-		}
-	}
-	return benchCount, nil
 }
 
 func (r *runnerWithPenalty) RunOnce(ctx context.Context, run int, test string) (int, error) {
 	benchCount := 0
+
+	//Collect benchmarks
+	var benchs []rmitBenchmark
+
 	for pkgName, pkg := range r.benchs {
-		fmt.Printf("# Execute Benchmarks in Dir: %s\n", pkgName)
+		fmt.Printf("# Collect Benchmarks in Dir: %s\n", pkgName)
 
-		dir := filepath.Join(r.projectRoot, pkgName)
-
-		err := os.Chdir(dir)
-		if err != nil {
-			return benchCount, err
-		}
+		dir1 := filepath.Join(r.projectRoot, pkgName)
+		dir2 := filepath.Join(r.project2Root, pkgName)
 
 		for fileName, file := range pkg {
-			fmt.Printf("## Execute Benchmarks of File: %s\n", fileName)
-			for _, bench := range file {
-				executed, err := r.RunBenchmark(ctx, bench, run, 0, test)
-				if err != nil {
-					return benchCount, err
-				}
-				benchCount += executed
-
-				select {
-				case <-ctx.Done():
-					return benchCount, ctx.Err()
-				default:
-				}
+			fmt.Printf("## Collect Benchmarks in File: %s\n", fileName)
+			for _, bench := range file{
+				benchs = append(benchs, rmitBenchmark{dir1, dir2, bench})
 			}
 		}
 	}
+
+	//Shuffle benchmarks
+	fmt.Printf("#####################\n")
+	fmt.Printf("## Shuffle Benchmarks\n")
+	rand.Seed(time.Now().Unix())
+	rand.Shuffle(len(benchs), func(i, j int) {
+		benchs[i], benchs[j] = benchs[j], benchs[i]
+	})
+	fmt.Printf("#####################\n")
+
+	//run benchmarks
+	for _, b := range benchs {
+		executed, err := r.RunBenchmark(ctx, b, run, 0, test)
+		if err != nil {
+			return benchCount, err
+		}
+		benchCount += executed
+		fmt.Printf("%d / %d done\n", benchCount, len(benchs))
+
+		select {
+		case <-ctx.Done():
+			return benchCount, ctx.Err()
+		default:
+		}
+	}
+
 	return benchCount, nil
 }
 
 func (r *runnerWithPenalty) Run(ctx context.Context, run int, test string) (int, error) {
-	if r.runDuration != 0 {
-		done := make(chan struct{})
-		go func() {
-		Loop:
-			for {
-				select {
-				case <-time.After(r.runDuration):
-					break Loop
-				case <-ctx.Done():
-					break Loop
-				default:
-				}
-			}
-			close(done)
-		}()
-		return r.RunUntil(ctx, run, test, done)
-	}
 	return r.RunOnce(ctx, run, test)
 }
 
@@ -313,8 +318,8 @@ func replaceSlashes(p string) string {
 	return strings.Replace(p, "/", "-", -1)
 }
 
-func saveBenchOut(test string, run int, suiteExec int, benchExec int, b data.Function, res []result, out csv.Writer, benchMem bool) {
-	outSize := 5
+func saveBenchOut(test string, run int, suiteExec int, benchExec int, b data.Function, res []result, out csv.Writer, benchMem bool, version int) {
+	outSize := 7
 	if benchMem {
 		outSize += 2
 	}
@@ -324,6 +329,8 @@ func saveBenchOut(test string, run int, suiteExec int, benchExec int, b data.Fun
 		rec = append(rec, fmt.Sprintf("%d-%d-%d", run, suiteExec, benchExec))
 		rec = append(rec, test)
 		rec = append(rec, filepath.Join(b.Pkg, b.File, b.Name))
+		rec = append(rec, result.benchName)
+		rec = append(rec, strconv.Itoa(version))
 		rec = append(rec, strconv.Itoa(result.Invocations))
 		rec = append(rec, strconv.FormatFloat(float64(result.Runtime), 'f', -1, 32))
 

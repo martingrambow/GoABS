@@ -1,0 +1,10 @@
+{
+	"project": "???\\whenToMicrobenchmark\\influxdb1",
+	"project2": "???\\whenToMicrobenchmark\\influxdb2",
+	"dynamic": {
+		"bench_time": "1s",
+		"bench_timeout": "5s",
+		"i": 1,
+		"runs": 1
+	}
+}

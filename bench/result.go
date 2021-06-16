@@ -15,6 +15,7 @@ const (
 type resultNotParsable error
 
 type result struct {
+	benchName   string  // benchmark name
 	Invocations int     // invocations per benchmark execution
 	Runtime     float32 // unit: ns/op
 	Memory      int     // unit: B/op
@@ -60,6 +61,13 @@ func parse(s string, mem bool) ([]result, error) {
 				return emptyResult, resultNotParsable(fmt.Errorf("Could not parse invocation count. Error: %v", err))
 			}
 			curr.Invocations = int(ivs)
+
+			// parse benchmark name
+			name := resArr[i-3]
+			if err != nil {
+				return emptyResult, resultNotParsable(fmt.Errorf("Could not parse banchmark name. Error: %v", err))
+			}
+			curr.benchName = name
 
 			// add parsed result to return slice (no further results for that execution)
 			if !mem {

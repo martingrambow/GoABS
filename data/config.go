@@ -7,6 +7,7 @@ import (
 
 type Config struct {
 	Project       string        `json:"project"`
+	Project2      string        `json:"project2"`
 	DynamicConfig DynamicConfig `json:"dynamic"`
 	TraceLibrary  string        `json:"trace_lib"`
 	ClearFolder   string        `json:"clear"`
