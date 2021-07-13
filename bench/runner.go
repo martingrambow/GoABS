@@ -152,33 +152,44 @@ func (r *runnerWithPenalty) RunBenchmarkOnce(ctx context.Context, bench rmitBenc
 		args = r.profileCmdArgs(args, bench.bench, run, suiteExec, benchExec, test)
 	}
 
-	x := rand.Intn(2) //x is 0 or 1
-	fmt.Printf("x is %d\n", x)
+	if bench.dir2 == "" {
 
-	if x == 0 {
 		fmt.Printf("Changing directory to dir1: %s\n", bench.dir1)
 		err := os.Chdir(bench.dir1)
 		if err != nil {
 			fmt.Printf("Error while changing directory to dir1: %s\n %s\n", bench.dir1, err)
 		}
 		r.RunOneVersion(ctx, bench.bench, run, suiteExec, benchExec, test, 1, r.env)
-	}
 
-	fmt.Printf("Changing directory to dir2: %s\n", bench.dir2)
-	err := os.Chdir(bench.dir2)
-	if err != nil {
-		fmt.Printf("Error while changing directory to dir2: %s\n %s\n", bench.dir2, err)
-	}
-	r.RunOneVersion(ctx, bench.bench, run, suiteExec, benchExec, test, 2, r.env2)
+	} else {
 
+		x := rand.Intn(2) //x is 0 or 1
+		fmt.Printf("x is %d\n", x)
 
-	if x > 0 {
-		fmt.Printf("Changing directory to dir1: %s\n", bench.dir1)
-		err := os.Chdir(bench.dir1)
-		if err != nil {
-			fmt.Printf("Error while changing directory to dir1: %s\n %s\n", bench.dir1, err)
+		if x == 0 {
+			fmt.Printf("Changing directory to dir1: %s\n", bench.dir1)
+			err := os.Chdir(bench.dir1)
+			if err != nil {
+				fmt.Printf("Error while changing directory to dir1: %s\n %s\n", bench.dir1, err)
+			}
+			r.RunOneVersion(ctx, bench.bench, run, suiteExec, benchExec, test, 1, r.env)
 		}
-		r.RunOneVersion(ctx, bench.bench, run, suiteExec, benchExec, test, 1, r.env)
+
+		fmt.Printf("Changing directory to dir2: %s\n", bench.dir2)
+		err := os.Chdir(bench.dir2)
+		if err != nil {
+			fmt.Printf("Error while changing directory to dir2: %s\n %s\n", bench.dir2, err)
+		}
+		r.RunOneVersion(ctx, bench.bench, run, suiteExec, benchExec, test, 2, r.env2)
+
+		if x > 0 {
+			fmt.Printf("Changing directory to dir1: %s\n", bench.dir1)
+			err := os.Chdir(bench.dir1)
+			if err != nil {
+				fmt.Printf("Error while changing directory to dir1: %s\n %s\n", bench.dir1, err)
+			}
+			r.RunOneVersion(ctx, bench.bench, run, suiteExec, benchExec, test, 1, r.env)
+		}
 	}
 
 	return true, nil
@@ -233,7 +244,10 @@ func (r *runnerWithPenalty) RunOnce(ctx context.Context, run int, test string) (
 		fmt.Printf("# Collect Benchmarks in Dir: %s\n", pkgName)
 
 		dir1 := filepath.Join(r.projectRoot, pkgName)
-		dir2 := filepath.Join(r.project2Root, pkgName)
+		dir2 := ""
+		if r.project2Root != "" {
+			dir2 = filepath.Join(r.project2Root, pkgName)
+		}
 
 		for fileName, file := range pkg {
 			fmt.Printf("## Collect Benchmarks in File: %s\n", fileName)
