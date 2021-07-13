@@ -137,63 +137,64 @@ func dptc(c data.Config) error {
 	if err != nil {
 		return err
 	}
-	var benchs1 = benchs
-	benchs = data.PackageMap{}
 
-	var benchs2 data.PackageMap
-	if benchRegex := c.DynamicConfig.BenchmarkRegex; benchRegex != "" {
-		benchs2, err = bench.MatchingFunctions(c.Project2, benchRegex)
-	} else {
-		benchs2, err = bench.Functions(c.Project2)
-	}
+	if c.Project2 != "" {
+		var benchs1 = benchs
+		benchs = data.PackageMap{}
 
-	if err != nil {
-		return err
-	}
+		var benchs2 data.PackageMap
+		if benchRegex := c.DynamicConfig.BenchmarkRegex; benchRegex != "" {
+			benchs2, err = bench.MatchingFunctions(c.Project2, benchRegex)
+		} else {
+			benchs2, err = bench.Functions(c.Project2)
+		}
 
-	if benchs2 != nil {
-		var countbench1 = 0
-		var countbenchAll = 0
+		if err != nil {
+			return err
+		}
 
-		//Merge bench2 and bench (using only intersection) and log difference
-		for module, test := range benchs1 {
-			//fmt.Println("Module:", module)
+		if benchs2 != nil {
+			var countbench1 = 0
+			var countbenchAll = 0
 
-			for test, bench := range test {
-				//fmt.Println("  Test:", test)
+			//Merge bench2 and bench (using only intersection) and log difference
+			for module, test := range benchs1 {
+				//fmt.Println("Module:", module)
 
-				for _, b := range bench {
-					//fmt.Println("    Bench:", b)
-					countbench1++
+				for test, bench := range test {
+					//fmt.Println("  Test:", test)
 
-					//Search same benchmark in benchs2
-					for module2, test2 := range benchs2 {
-						for test2, bench2 := range test2 {
-							for _, b2 := range bench2 {
-								if module == module2 && test == test2 && b == b2 {
-									//Found, add to common set
-									if (benchs[module] == nil) {
-										benchs[module] = data.FileMap{}
+					for _, b := range bench {
+						//fmt.Println("    Bench:", b)
+						countbench1++
+
+						//Search same benchmark in benchs2
+						for module2, test2 := range benchs2 {
+							for test2, bench2 := range test2 {
+								for _, b2 := range bench2 {
+									if module == module2 && test == test2 && b == b2 {
+										//Found, add to common set
+										if (benchs[module] == nil) {
+											benchs[module] = data.FileMap{}
+										}
+										if (benchs[module][test] == nil) {
+											benchs[module][test] = data.File{}
+										}
+										benchs[module][test] = append(benchs[module][test], b)
+										countbenchAll++
+
+										//Remove found common benchmark from both other sets
+										//???
 									}
-									if (benchs[module][test] == nil) {
-										benchs[module][test] = data.File{}
-									}
-									benchs[module][test] = append(benchs[module][test], b)
-									countbenchAll++
-
-									//Remove found common benchmark from both other sets
-									//???
-
 								}
 							}
 						}
-					}
 
+					}
 				}
 			}
+			fmt.Println("Bench1: ", countbench1, "All: ", countbenchAll)
 		}
-
-		fmt.Println("Bench1: ", countbench1, "All: ", countbenchAll)
 	}
 
 
