@@ -146,11 +146,7 @@ func (r *runnerWithPenalty) RunBenchmark(ctx context.Context, bench rmitBenchmar
 
 func (r *runnerWithPenalty) RunBenchmarkOnce(ctx context.Context, bench rmitBenchmark, run int, suiteExec int, benchExec int, test string) (bool, error) {
 	fmt.Printf("### Execute Benchmark: %s/%s::%s\n", bench.bench.Pkg, bench.bench.File, bench.bench.Name)
-	args := append(r.cmdArgs, fmt.Sprintf(cmdArgsBench, bench.bench.Name))
-	// add profile if necessary
-	if r.profile != data.NoProfile {
-		args = r.profileCmdArgs(args, bench.bench, run, suiteExec, benchExec, test)
-	}
+	//args := append(r.cmdArgs, fmt.Sprintf(cmdArgsBench, bench.bench.Name))
 
 	if bench.dir2 == "" {
 
@@ -199,8 +195,15 @@ func (r *runnerWithPenalty) RunOneVersion(ctx context.Context, bench data.Functi
 	relBenchName := fmt.Sprintf("%s/%s::%s", bench.Pkg, bench.File, bench.Name)
 	args := append(r.cmdArgs, fmt.Sprintf(cmdArgsBench, bench.Name))
 
+	// add profile if necessary
+	if r.profile != data.NoProfile {
+		args = r.profileCmdArgs(args, bench, run, suiteExec, benchExec, test)
+	}
+
 	c := exec.Command(executil.GoCommand(env), args...)
 	c.Env = env
+
+	fmt.Printf("Running '%s\n", c.Args)
 
 	res, err := c.CombinedOutput()
 	resStr := string(res)
@@ -329,7 +332,9 @@ func replaceSlashes(p string) string {
 	if strings.HasSuffix(p, "/") {
 		p = p[:len(p)-1]
 	}
-	return strings.Replace(p, "/", "-", -1)
+	result := strings.Replace(p, "/", "-", -1)
+	result = strings.Replace(result, "\\", "-", -1)
+	return result
 }
 
 func saveBenchOut(test string, run int, suiteExec int, benchExec int, b data.Function, res []result, out csv.Writer, benchMem bool, version int) {
