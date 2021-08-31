@@ -381,7 +381,7 @@ func checkFiles(c data.Config) error {
 // containsNamedFunction checks if a string is present in a slice
 func containsNamedFunction(functions []data.Function, function data.Function) bool {
 	for _, f := range functions {
-		if f.File == function.Name && f.Pkg == function.Pkg && f.File == function.File {
+		if f.File == function.Name && f.Pkg == function.Pkg {
 			return true
 		}
 	}
