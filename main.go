@@ -175,6 +175,8 @@ func dptc(c data.Config) error {
 							for test2, bench2 := range test2 {
 								for _, b2 := range bench2 {
 									if module == module2 && test == test2 && b == b2 && (includeBenchs == nil || containsNamedFunction(includeBenchs, b)) {
+										fmt.Println("includeBenchs is nil: ", includeBenchs == nil, "containsNamedFunction: ", containsNamedFunction(includeBenchs, b))
+
 										//Found, add to common set
 										if benchs[module] == nil {
 											benchs[module] = data.FileMap{}
