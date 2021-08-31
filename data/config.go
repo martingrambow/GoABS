@@ -30,7 +30,7 @@ type DynamicConfig struct {
 	ProfileDir            string     `json:"profile_dir"`
 	Regression            float32    `json:"regression"`
 	Functions             []Function `json:"functions"`
-	IncludeBenchs         []Function `json:"include_bench"`
+	IncludeBenchs         []Function `json:"include_benchs"`
 	Rmit                  bool       `json:"rmit"`
 }
 
