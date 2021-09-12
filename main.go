@@ -127,6 +127,8 @@ func dptc(c data.Config) error {
 		bt = defaultBenchTime
 	}
 
+	includeBenchs := c.DynamicConfig.IncludeBenchs
+
 	var benchs data.PackageMap
 	if benchRegex := c.DynamicConfig.BenchmarkRegex; benchRegex != "" {
 		benchs, err = bench.MatchingFunctions(c.Project, benchRegex)
@@ -172,12 +174,12 @@ func dptc(c data.Config) error {
 						for module2, test2 := range benchs2 {
 							for test2, bench2 := range test2 {
 								for _, b2 := range bench2 {
-									if module == module2 && test == test2 && b == b2 {
+									if module == module2 && test == test2 && b == b2 && (includeBenchs == nil || containsNamedFunction(includeBenchs, b)) {
 										//Found, add to common set
-										if (benchs[module] == nil) {
+										if benchs[module] == nil {
 											benchs[module] = data.FileMap{}
 										}
-										if (benchs[module][test] == nil) {
+										if benchs[module][test] == nil {
 											benchs[module][test] = data.File{}
 										}
 										benchs[module][test] = append(benchs[module][test], b)
@@ -374,4 +376,15 @@ func checkFiles(c data.Config) error {
 		}
 	}
 	return nil
+}
+
+// containsNamedFunction checks if a string is present in a slice
+func containsNamedFunction(functions []data.Function, function data.Function) bool {
+	for _, f := range functions {
+		if f.Name == function.Name && f.Pkg == function.Pkg {
+			return true
+		}
+	}
+
+	return false
 }

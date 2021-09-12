@@ -37,6 +37,16 @@ Examplary configuration file for bleve project:
 				"name": "NewDictionaryRow",
 				"recv": ""
 			}
+		],
+		"include_benchs": [
+			{
+				"pkg": "analysis",
+				"name": "LoadLine"
+			},
+			{
+				"pkg": "index/upsidedown",
+				"name": "NewDictionaryRow"
+			}
 		]
 	}
 }
